@@ -1,0 +1,10 @@
+_example
+todo.md
+
+# osx
+.DS_Store
+
+# Local Netlify folder
+.netlify
+.env
+tmp
