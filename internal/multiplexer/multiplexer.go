@@ -4,380 +4,136 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"log/slog"
 	"os"
-	"runtime/debug"
 	"strings"
-	"syscall"
-	"time"
 
 	"github.com/gdamore/tcell/v2"
-	"github.com/gdamore/tcell/v2/views"
 	"github.com/nodge/multiplexer/internal/process"
 	tcellterm "github.com/nodge/multiplexer/internal/tcell-term"
 )
 
-var PAD_HEIGHT = 0
-var PAD_WIDTH = 0
-var SIDEBAR_WIDTH = 20
-
 type Multiplexer struct {
 	ctx       context.Context
-	focused   bool
-	width     int
-	height    int
-	selected  int
-	processes []*pane
-	screen    tcell.Screen
-	root      *views.ViewPort
-	main      *views.ViewPort
-	stack     *views.BoxLayout
-
-	dragging bool
-	click    *tcell.EventMouse
+	panes     []*pane
+	ui        *UI
+	eventLoop *EventLoop
 }
 
 func New(ctx context.Context) (*Multiplexer, error) {
-	var err error
-	result := &Multiplexer{}
-	result.ctx = ctx
-	result.processes = []*pane{}
-	result.screen, err = tcell.NewScreen()
+	screen, err := tcell.NewScreen()
 	if err != nil {
 		return nil, err
 	}
-	result.screen.Init()
-	result.screen.EnableMouse()
-	result.screen.Show()
-	width, height := result.screen.Size()
-	result.width = width
-	result.height = height
-	result.root = views.NewViewPort(result.screen, 0, 0, 0, 0)
-	result.main = views.NewViewPort(result.screen, 0, 0, 0, 0)
-	result.stack = views.NewBoxLayout(views.Vertical)
-	result.stack.SetView(result.root)
-	if os.Getenv("TMUX") != "" {
-		process.Command("tmux", "set-option", "-p", "set-clipboard", "on").Run()
+
+	err = screen.Init()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize screen: %w", err)
 	}
+
+	screen.EnableMouse()
+	screen.Show()
+
+	result := &Multiplexer{
+		ctx:   ctx,
+		panes: []*pane{},
+		ui:    NewUI(screen),
+	}
+
+	result.enableTmuxClipboard()
+
 	return result, nil
 }
 
-func (s *Multiplexer) mainRect() (int, int) {
-	return s.width - SIDEBAR_WIDTH + 1, s.height
-}
-
-func (s *Multiplexer) resize(width int, height int) {
-	s.width = width
-	s.height = height
-	s.root.Resize(PAD_WIDTH, PAD_HEIGHT, SIDEBAR_WIDTH, height-PAD_HEIGHT*2)
-	s.main.Resize(PAD_WIDTH+SIDEBAR_WIDTH+PAD_WIDTH+1, PAD_HEIGHT, width-PAD_WIDTH-SIDEBAR_WIDTH-PAD_WIDTH-PAD_WIDTH-1, height-PAD_HEIGHT*2)
-	mw, mh := s.main.Size()
-	for _, p := range s.processes {
-		p.vt.Resize(mw, mh)
-	}
-}
-
+// Start begins the main event loop for the multiplexer.
+// Handles all user input, terminal events, and process management.
+// The loop continues until the context is cancelled or an exit event is received.
 func (s *Multiplexer) Start() {
 	defer func() {
-		s.screen.Fini()
+		s.ui.stop()
 	}()
 
-	s.resize(s.screen.Size())
+	s.ui.start()
 
-	for {
-		select {
-		case <-s.ctx.Done():
-			return
-		default:
-			unknown := s.screen.PollEvent()
-			if unknown == nil {
-				continue
-			}
-			shouldBreak := false
-			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						slog.Error("mutliplexer panic", "err", r, "stack", string(debug.Stack()))
-					}
-				}()
-
-				selected := s.selectedProcess()
-
-				switch evt := unknown.(type) {
-
-				case *EventExit:
-					shouldBreak = true
-					return
-
-				case *EventProcess:
-					for _, p := range s.processes {
-						if p.key == evt.Key {
-							if p.dead && evt.Autostart {
-								p.start()
-								s.sort()
-								s.draw()
-							}
-							return
-						}
-					}
-					proc := &pane{
-						icon:     evt.Icon,
-						key:      evt.Key,
-						dir:      evt.Cwd,
-						title:    evt.Title,
-						args:     evt.Args,
-						killable: evt.Killable,
-						env:      evt.Env,
-					}
-					term := tcellterm.New()
-					term.SetSurface(s.main)
-					term.Attach(func(ev tcell.Event) {
-						s.screen.PostEvent(ev)
-					})
-					proc.vt = term
-					if evt.Autostart {
-						proc.start()
-					}
-					if !evt.Autostart {
-						proc.vt.Start(process.Command("echo", evt.Key+" has auto-start disabled, press enter to start."))
-						proc.dead = true
-					}
-					s.processes = append(s.processes, proc)
-					s.sort()
-					s.draw()
-					break
-
-				case *tcell.EventMouse:
-					if evt.Buttons()&tcell.WheelUp != 0 {
-						s.scrollUp(3)
-						return
-					}
-					if evt.Buttons()&tcell.WheelDown != 0 {
-						s.scrollDown(3)
-						return
-					}
-					if evt.Buttons() == tcell.ButtonNone {
-						if s.dragging && selected != nil {
-							s.copy()
-						}
-						s.dragging = false
-						return
-					}
-					if evt.Buttons()&tcell.ButtonPrimary != 0 {
-						x, y := evt.Position()
-						if x < SIDEBAR_WIDTH && !s.dragging {
-							alive := 0
-							for _, p := range s.processes {
-								if !p.dead {
-									alive++
-								}
-							}
-							if alive != len(s.processes) {
-								if y == alive {
-									return
-								}
-								if y > alive {
-									y--
-								}
-							}
-							if y >= len(s.processes) {
-								return
-							}
-							s.selected = y
-							s.blur()
-							return
-						}
-						if x > SIDEBAR_WIDTH {
-							if !s.dragging && s.click != nil && time.Since(s.click.When()) < time.Millisecond*500 {
-								oldX, oldY := s.click.Position()
-								if oldX == x && oldY == y {
-									selected.vt.SelectStart(0, y)
-									selected.vt.SelectEnd(s.width-1, y)
-									s.dragging = true
-									s.draw()
-									return
-								}
-							}
-							s.click = evt
-							offsetX := x - SIDEBAR_WIDTH - 1
-							if s.dragging {
-								selected.vt.SelectEnd(offsetX, y)
-							}
-							if !s.dragging {
-								s.dragging = true
-								selected.vt.SelectStart(offsetX, y)
-							}
-							s.draw()
-							return
-						}
-					}
-					break
-
-				case *tcell.EventResize:
-					slog.Info("resize")
-					s.resize(evt.Size())
-					s.draw()
-					s.screen.Sync()
-					return
-
-				case *tcellterm.EventRedraw:
-					if selected != nil && selected.vt == evt.VT() {
-						selected.vt.Draw()
-						s.screen.Show()
-					}
-					return
-
-				case *tcellterm.EventClosed:
-					for index, proc := range s.processes {
-						if proc.vt == evt.VT() {
-							if !proc.dead {
-								proc.vt.Start(process.Command("echo", "\n[process exited]"))
-								proc.dead = true
-								s.sort()
-								if index == s.selected {
-									s.blur()
-								}
-							}
-						}
-					}
-					s.draw()
-					return
-
-				case *tcell.EventKey:
-					switch evt.Key() {
-					case 256:
-						switch evt.Rune() {
-						case 'j':
-							if !s.focused {
-								s.move(1)
-								return
-							}
-						case 'k':
-							if !s.focused {
-								s.move(-1)
-								return
-							}
-						case 'x':
-							if selected.killable && !selected.dead && !s.focused {
-								selected.Kill()
-							}
-						}
-					case tcell.KeyUp:
-						if !s.focused {
-							s.move(-1)
-							return
-						}
-					case tcell.KeyDown:
-						if !s.focused {
-							s.move(1)
-							return
-						}
-					case tcell.KeyCtrlU:
-						if selected != nil {
-							s.scrollUp(s.height/2 + 1)
-							return
-						}
-					case tcell.KeyCtrlD:
-						if selected != nil {
-							s.scrollDown(s.height/2 + 1)
-							return
-						}
-					case tcell.KeyEnter:
-						if selected != nil && selected.vt.HasSelection() {
-							s.copy()
-							selected.vt.ClearSelection()
-							s.draw()
-							return
-						}
-						if selected != nil && selected.isScrolling() && (s.focused || !selected.killable) {
-							selected.scrollReset()
-							s.draw()
-							s.screen.Sync()
-							return
-						}
-						if !s.focused {
-							if selected.killable {
-								if selected.dead {
-									selected.start()
-									s.sort()
-									s.draw()
-									return
-								}
-								s.focus()
-							}
-							return
-						}
-					case tcell.KeyCtrlC:
-						if !s.focused {
-							s.move(-99999)
-							pid := os.Getpid()
-							process, _ := os.FindProcess(pid)
-							process.Signal(syscall.SIGINT)
-							return
-						}
-					case tcell.KeyCtrlZ:
-						if s.focused {
-							s.blur()
-							return
-						}
-					}
-
-					if selected != nil && s.focused && !selected.isScrolling() {
-						selected.vt.HandleEvent(evt)
-						s.draw()
-					}
-				}
-			}()
-			if shouldBreak {
-				return
-			}
-		}
-	}
+	eventLoop := NewEventLoop(s)
+	eventLoop.Run(s.ctx)
 }
 
-type EventExit struct {
-	when time.Time
-}
-
-func (e *EventExit) When() time.Time {
-	return e.when
-}
-
+// Posts an exit event to the event queue, triggering graceful shutdown.
 func (s *Multiplexer) Exit() {
-	s.screen.PostEvent(&EventExit{})
+	s.ui.screen.PostEvent(&EventExit{})
 }
 
+// AddProcess posts an event to add a new process to the multiplexer
+func (s *Multiplexer) AddProcess(key string, args []string, icon string, title string, cwd string, killable bool, autostart bool, env ...string) {
+	s.ui.screen.PostEvent(&EventProcess{
+		Key:       key,
+		Args:      args,
+		Icon:      icon,
+		Title:     title,
+		Cwd:       cwd,
+		Killable:  killable,
+		Autostart: autostart,
+		Env:       env,
+	})
+}
+
+// Creates new pane and attaches virtual terminal
+func (s *Multiplexer) addPane(p *pane) *pane {
+	p.vt = tcellterm.New()
+	p.vt.SetSurface(s.ui.activePaneView)
+	// Forward terminal events back to the main event loop
+	p.vt.Attach(func(ev tcell.Event) {
+		s.ui.screen.PostEvent(ev)
+	})
+
+	s.panes = append(s.panes, p)
+	s.ui.addPane(p)
+
+	return p
+}
+
+// resize delegates to the UI's Resize method
+func (s *Multiplexer) resize(width int, height int) {
+	s.ui.resize(width, height)
+}
+
+// Scrolls the selected terminal down by n lines and refreshes the display.
 func (s *Multiplexer) scrollDown(n int) {
-	selected := s.selectedProcess()
+	selected := s.ui.selectedPane()
 	if selected == nil {
 		return
 	}
 	selected.scrollDown(n)
-	s.draw()
-	s.screen.Sync()
+	s.ui.draw()
+	s.ui.screen.Sync()
 }
 
+// Scrolls the selected terminal up by n lines and refreshes the display.
 func (s *Multiplexer) scrollUp(n int) {
-	selected := s.selectedProcess()
+	selected := s.ui.selectedPane()
 	if selected == nil {
 		return
 	}
 	selected.scrollUp(n)
-	s.draw()
+	s.ui.draw()
 }
 
+// Handles clipboard operations for selected text.
+// Uses platform-specific methods: pbcopy on macOS Terminal, OSC 52 escape sequences elsewhere.
+// OSC 52 allows terminal applications to set clipboard content via escape sequences.
 func (s *Multiplexer) copy() {
-	selected := s.selectedProcess()
+	selected := s.ui.selectedPane()
 	if selected == nil {
 		return
 	}
+
 	data := selected.vt.Copy()
 	if data == "" {
 		return
 	}
-	// check if mac terminal
+
+	// Use pbcopy on macOS Terminal for better integration
 	if os.Getenv("TERM_PROGRAM") == "Apple_Terminal" {
-		// use pbcopy
 		cmd := process.Command("pbcopy")
 		cmd.Stdin = strings.NewReader(data)
 		err := cmd.Run()
@@ -386,6 +142,20 @@ func (s *Multiplexer) copy() {
 		}
 		return
 	}
+
+	// Use OSC 52 escape sequence for universal clipboard support
 	encoded := base64.StdEncoding.EncodeToString([]byte(data))
 	fmt.Fprintf(os.Stdout, "\x1b]52;c;%s\x07", encoded)
+}
+
+// Enables clipboard integration when the multiplexer is running within a tmux session.
+func (m *Multiplexer) enableTmuxClipboard() {
+	const tmuxEnvVar = "TMUX"
+	const tmuxClipboardOption = "set-clipboard"
+
+	if os.Getenv("TMUX") == "" {
+		return // Not running inside tmux, no action needed
+	}
+
+	process.Command("tmux", "set-option", "-p", "set-clipboard", "on").Run()
 }

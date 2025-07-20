@@ -10,19 +10,19 @@ import (
 	"syscall"
 
 	"github.com/nodge/multiplexer/internal/multiplexer"
+	"github.com/nodge/multiplexer/internal/process"
 )
 
 func main() {
-	// Parse command-line flags
 	var commands stringSliceFlag
 	flag.Var(&commands, "cmd", "Command to run in the multiplexer (can be specified multiple times)")
 	flag.Parse()
 
-	// Create context with cancellation
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Handle interrupts
+	process.Cleanup()
+
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
@@ -30,14 +30,18 @@ func main() {
 		cancel()
 	}()
 
-	// Create multiplexer
 	multi, err := multiplexer.New(ctx)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating multiplexer: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Add commands
+	cwd, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error getting current working directory: %v\n", err)
+		os.Exit(1)
+	}
+
 	for i, cmd := range commands {
 		parts := strings.Fields(cmd)
 		if len(parts) == 0 {
@@ -52,13 +56,12 @@ func main() {
 			parts,
 			"→",
 			title,
-			"",
+			cwd,
 			true,
 			true,
 		)
 	}
 
-	// Start multiplexer
 	multi.Start()
 }
 

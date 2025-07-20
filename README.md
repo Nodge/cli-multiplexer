@@ -1,6 +1,6 @@
 # Console UI Multiplexer
 
-A standalone terminal multiplexer that allows running multiple console commands simultaneously with a user-friendly UI.
+A terminal multiplexer with a sidebar-based TUI interface. It manages multiple terminal processes in separate panes, allowing users to switch between them and interact with each process independently.
 
 ## Features
 
@@ -26,10 +26,10 @@ go build ./cmd/multiplexer
 
 ```bash
 # Run the multiplexer with multiple commands
-./multiplexer -cmd "ls -la" -cmd "echo Hello, World"
+./multiplexer --cmd "ls -la" --cmd "echo Hello, World"
 
 # Run more complex commands
-./multiplexer -cmd "top" -cmd "tail -f /var/log/system.log" -cmd "htop"
+./multiplexer --cmd "top" --cmd "tail -f /var/log/system.log" --cmd "htop"
 ```
 
 ## Keyboard Shortcuts

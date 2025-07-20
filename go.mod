@@ -1,6 +1,6 @@
 module github.com/nodge/multiplexer
 
-go 1.23.4
+go 1.24.5
 
 require (
 	github.com/creack/pty v1.1.24

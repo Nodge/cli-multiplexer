@@ -32,12 +32,6 @@ func CommandContext(ctx context.Context, name string, args ...string) *exec.Cmd 
 	return cmd
 }
 
-func reset() {
-	lock.Lock()
-	defer lock.Unlock()
-	cmds = []*exec.Cmd{}
-}
-
 func track(cmd *exec.Cmd) {
 	lock.Lock()
 	defer lock.Unlock()
@@ -96,17 +90,14 @@ func Kill(process *os.Process) error {
 	if process == nil {
 		return nil
 	}
-	slog.Info("killing process", "pid", process.Pid)
+	// slog.Info("killing process", "pid", process.Pid)
 
 	switch runtime.GOOS {
-
 	case "windows":
 		if err := process.Kill(); err != nil {
 			slog.Error("failed to kill", "pid", process.Pid)
 			return err
 		}
-		break
-
 	default:
 		if err := process.Signal(syscall.SIGTERM); err != nil {
 			slog.Error("failed to send sigterm", "pid", process.Pid)
@@ -122,10 +113,10 @@ func Kill(process *os.Process) error {
 
 	select {
 	case <-done:
-		slog.Info("process killed with term", "pid", process.Pid)
+		// slog.Info("process killed with term", "pid", process.Pid)
 		break
 	case <-time.After(killWait):
-		slog.Info("process not responding, sending sigkill", "pid", process.Pid)
+		// slog.Info("process not responding, sending sigkill", "pid", process.Pid)
 		if err := process.Signal(syscall.SIGKILL); err != nil {
 			slog.Error("failed to send sigkill", "pid", process.Pid)
 			return err
@@ -134,10 +125,10 @@ func Kill(process *os.Process) error {
 		// Wait for SIGKILL to complete
 		select {
 		case <-done:
-			slog.Info("process killed with kill", "pid", process.Pid)
+			// slog.Info("process killed with kill", "pid", process.Pid)
 			break
 		case <-time.After(killWait):
-			slog.Info("timed out waiting for sigkill", "pid", process.Pid)
+			// slog.Info("timed out waiting for sigkill", "pid", process.Pid)
 			return syscall.ETIMEDOUT
 		}
 	}
@@ -150,6 +141,6 @@ func Kill(process *os.Process) error {
 			break
 		}
 	}
-	slog.Info("untracked process", "pid", process.Pid)
+	// slog.Info("untracked process", "pid", process.Pid)
 	return nil
 }

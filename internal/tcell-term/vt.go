@@ -45,7 +45,6 @@ type VT struct {
 	cursor   cursor
 	margin   margin
 	mode     mode
-	sShift   charset
 	tabStop  []column
 	// lastCol is a flag indicating we printed in the last col
 	lastCol bool
@@ -135,7 +134,7 @@ func New() *VT {
 			decawm: true,
 		},
 		tabStop:      tabs,
-		eventHandler: func(ev tcell.Event) { return },
+		eventHandler: func(ev tcell.Event) {},
 		// Buffering to 2 events. If there is ever a case where one
 		// sequence can trigger two events, this should be increased
 		events: make(chan tcell.Event, 2),
@@ -467,9 +466,7 @@ func (vt *VT) Attach(fn func(ev tcell.Event)) {
 func (vt *VT) Detach() {
 	vt.mu.Lock()
 	defer vt.mu.Unlock()
-	vt.eventHandler = func(ev tcell.Event) {
-		return
-	}
+	vt.eventHandler = func(ev tcell.Event) {}
 }
 
 func (vt *VT) postEvent(ev tcell.Event) {
