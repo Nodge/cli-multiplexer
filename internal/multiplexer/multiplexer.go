@@ -13,8 +13,8 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/gdamore/tcell/v2/views"
+	"github.com/nodge/multiplexer/internal/process"
 	tcellterm "github.com/nodge/multiplexer/internal/tcell-term"
-	"github.com/nodge/multiplexer/pkg/process"
 )
 
 var PAD_HEIGHT = 0
@@ -79,9 +79,6 @@ func (s *Multiplexer) resize(width int, height int) {
 
 func (s *Multiplexer) Start() {
 	defer func() {
-		// for _, p := range s.processes {
-		// 	p.Kill()
-		// }
 		s.screen.Fini()
 	}()
 
@@ -108,9 +105,18 @@ func (s *Multiplexer) Start() {
 
 				switch evt := unknown.(type) {
 
+				case *EventExit:
+					shouldBreak = true
+					return
+
 				case *EventProcess:
 					for _, p := range s.processes {
 						if p.key == evt.Key {
+							if p.dead && evt.Autostart {
+								p.start()
+								s.sort()
+								s.draw()
+							}
 							return
 						}
 					}
@@ -122,7 +128,6 @@ func (s *Multiplexer) Start() {
 						args:     evt.Args,
 						killable: evt.Killable,
 						env:      evt.Env,
-						dead:     !evt.Autostart,
 					}
 					term := tcellterm.New()
 					term.SetSurface(s.main)
@@ -304,10 +309,10 @@ func (s *Multiplexer) Start() {
 						}
 					case tcell.KeyCtrlC:
 						if !s.focused {
+							s.move(-99999)
 							pid := os.Getpid()
 							process, _ := os.FindProcess(pid)
 							process.Signal(syscall.SIGINT)
-							shouldBreak = true
 							return
 						}
 					case tcell.KeyCtrlZ:
@@ -328,6 +333,18 @@ func (s *Multiplexer) Start() {
 			}
 		}
 	}
+}
+
+type EventExit struct {
+	when time.Time
+}
+
+func (e *EventExit) When() time.Time {
+	return e.when
+}
+
+func (s *Multiplexer) Exit() {
+	s.screen.PostEvent(&EventExit{})
 }
 
 func (s *Multiplexer) scrollDown(n int) {

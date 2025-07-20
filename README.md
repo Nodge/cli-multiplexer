@@ -19,8 +19,7 @@ git clone https://github.com/nodge/multiplexer.git
 cd multiplexer
 
 # Build the multiplexer
-cd cmd/multiplexer
-go build
+go build ./cmd/multiplexer
 ```
 
 ## Usage

@@ -4,8 +4,8 @@ import (
 	"os/exec"
 
 	"github.com/gdamore/tcell/v2"
+	"github.com/nodge/multiplexer/internal/process"
 	tcellterm "github.com/nodge/multiplexer/internal/tcell-term"
-	"github.com/nodge/multiplexer/pkg/process"
 )
 
 type vterm struct {

@@ -9,13 +9,12 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync"
-	"syscall"
 	"unicode"
 
 	"github.com/creack/pty"
 	"github.com/gdamore/tcell/v2"
 	"github.com/mattn/go-runewidth"
-	"github.com/nodge/multiplexer/pkg/process"
+	"github.com/nodge/multiplexer/internal/process"
 )
 
 type (
@@ -166,14 +165,7 @@ func (vt *VT) Start(cmd *exec.Cmd) error {
 		Cols: uint16(w),
 		Rows: uint16(h),
 	}
-	vt.pty, err = pty.StartWithAttrs(
-		cmd,
-		&winsize,
-		&syscall.SysProcAttr{
-			Setsid:  true,
-			Setctty: true,
-			Ctty:    1,
-		})
+	vt.pty, err = pty.StartWithAttrs(cmd, &winsize, getPtyAttr())
 	if err != nil {
 		return err
 	}
