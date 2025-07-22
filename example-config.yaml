@@ -6,8 +6,8 @@ commands:
       PORT: "8080"
       NODE_ENV: "development"
   
-  - name: "⚡ frontend"
-    title: "Web UI"
+  - name: "frontend"
+    title: "⚡ Web UI"
     command: ["echo", "Frontend running"]
     
   - name: "database"
