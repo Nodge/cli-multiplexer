@@ -2,6 +2,8 @@
 
 A terminal multiplexer with a sidebar-based TUI interface. It manages multiple terminal processes in separate panes, allowing users to switch between them and interact with each process independently.
 
+<img src="screenshot.png" alt="Screenshot" style="max-width: 600px;">
+
 ## Features
 
 - Run multiple commands in a single terminal window
