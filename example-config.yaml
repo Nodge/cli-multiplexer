@@ -1,0 +1,26 @@
+commands:
+  - name: "backend"
+    title: "🚀 API Server"
+    command: ["echo", "backend running"]
+    env:
+      PORT: "8080"
+      NODE_ENV: "development"
+  
+  - name: "⚡ frontend"
+    title: "Web UI"
+    command: ["echo", "Frontend running"]
+    
+  - name: "database"
+    title: "DB"
+    command: ["echo", "Database running"]
+    killable: false
+
+  - name: "tail"
+    title: "tail"
+    command: ["tail", "-f", "/var/log/system.log"]
+    autostart: false
+
+  - name: "top"
+    title: "top"
+    command: ["top"]
+    autostart: false

@@ -24,12 +24,86 @@ go build ./cmd/multiplexer
 
 ## Usage
 
+### Command Line Arguments
+
 ```bash
 # Run the multiplexer with multiple commands
 ./multiplexer --cmd "ls -la" --cmd "echo Hello, World"
 
 # Run more complex commands
 ./multiplexer --cmd "top" --cmd "tail -f /var/log/system.log" --cmd "htop"
+```
+
+### Configuration Files
+
+The multiplexer supports configuration files in JSON and YAML formats for more advanced setups:
+
+```bash
+# Load configuration from a file (format auto-detected by extension)
+./multiplexer --config config.json
+./multiplexer --config config.yaml
+
+# Load configuration from stdin
+cat config.json | ./multiplexer --stdin
+echo '{"commands":[...]}' | ./multiplexer --stdin --format json
+```
+#### Configuration File Options
+
+Each command in the configuration supports the following options:
+
+- **`name`** (required): Unique identifier for the command
+- **`command`** (required): Array of command and arguments to execute
+- **`title`** (optional): Display name in the UI (defaults to `name`)
+- **`cwd`** (optional): Working directory for the command (relative or absolute)
+- **`env`** (optional): Environment variables to set for the command
+- **`autostart`** (optional): Whether to start the command automatically (default: `true`)
+- **`killable`** (optional): Whether the command can be killed manually (default: `true`)
+
+#### JSON Configuration Example
+
+```json
+{
+  "commands": [
+    {
+      "name": "backend",
+      "title": "🚀 API Server",
+      "command": ["go", "run", "./cmd/server"],
+      "cwd": "./backend",
+      "autostart": true,
+      "killable": false,
+      "env": {
+        "PORT": "8080",
+        "NODE_ENV": "development"
+      }
+    },
+    {
+      "name": "frontend",
+      "title": "⚡ Web UI",
+      "command": ["npm", "run", "dev"],
+      "autostart": false
+    }
+  ]
+}
+```
+
+#### YAML Configuration Example
+
+```yaml
+commands:
+  - name: "backend"
+    title: "🚀 API Server"
+    command: ["go", "run", "./cmd/server"]
+    cwd: "./backend"
+    autostart: true
+    killable: false
+    env:
+      PORT: "8080"
+      NODE_ENV: "development"
+  
+  - name: "frontend"
+    title: "⚡ Web UI"
+    command: ["npm", "run", "dev"]
+    autostart: false
 ```
 
 ## Keyboard Shortcuts
@@ -49,28 +123,3 @@ The multiplexer uses:
 - Virtual terminal emulation for command output
 
 Each command runs in its own pseudo-terminal, and the output is captured and displayed in the UI. The multiplexer handles keyboard and mouse input, and routes it to the appropriate command.
-
-## Project Structure
-
-```
-multiplexer/
-├── cmd/
-│   └── multiplexer/
-│       └── main.go         # Main entry point
-├── internal/
-│   ├── multiplexer/
-│   │   ├── multiplexer.go  # Core multiplexer implementation
-│   │   ├── process.go      # Process management
-│   │   ├── draw.go         # UI rendering
-│   │   ├── keycode.go      # Keyboard input handling
-│   │   └── terminfo.go     # Terminal information
-│   └── tcell-term/         # Terminal emulation
-└── pkg/
-    └── process/            # Process utilities
-```
-
-## Dependencies
-
-- github.com/gdamore/tcell/v2
-- github.com/creack/pty
-- github.com/mattn/go-runewidth

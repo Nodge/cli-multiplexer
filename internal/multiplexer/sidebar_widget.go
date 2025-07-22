@@ -40,7 +40,7 @@ func (s *PaneListWidget) render(panes []*pane, selected *pane, focused bool) {
 
 		title := views.NewTextBar()
 		title.SetStyle(style)
-		title.SetLeft(" "+item.icon+" "+item.title, tcell.StyleDefault)
+		title.SetLeft(" "+item.title, tcell.StyleDefault)
 		s.box.AddWidget(title, 0)
 	}
 }

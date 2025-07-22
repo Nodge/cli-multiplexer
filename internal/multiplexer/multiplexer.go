@@ -64,16 +64,15 @@ func (s *Multiplexer) Exit() {
 }
 
 // AddProcess posts an event to add a new process to the multiplexer
-func (s *Multiplexer) AddProcess(key string, args []string, icon string, title string, cwd string, killable bool, autostart bool, env ...string) {
+func (s *Multiplexer) AddProcess(key string, cmd []string, env map[string]string, title string, cwd string, killable bool, autostart bool) {
 	s.ui.screen.PostEvent(&EventProcess{
 		Key:       key,
-		Args:      args,
-		Icon:      icon,
+		Cmd:       cmd,
+		Env:       env,
 		Title:     title,
 		Cwd:       cwd,
 		Killable:  killable,
 		Autostart: autostart,
-		Env:       env,
 	})
 }
 

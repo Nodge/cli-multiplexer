@@ -16,13 +16,12 @@ import (
 type EventProcess struct {
 	tcell.EventTime
 	Key       string
-	Args      []string
-	Icon      string
+	Cmd       []string
+	Env       map[string]string
 	Title     string
 	Cwd       string
 	Killable  bool
 	Autostart bool
-	Env       []string
 }
 
 // EventExit is a custom event used to signal the multiplexer to shut down gracefully
@@ -132,13 +131,12 @@ func (eh *EventLoop) handleProcessEvent(evt *EventProcess) {
 	}
 
 	p := eh.multiplexer.addPane(&pane{
-		icon:     evt.Icon,
 		key:      evt.Key,
+		args:     evt.Cmd,
+		env:      evt.Env,
 		dir:      evt.Cwd,
 		title:    evt.Title,
-		args:     evt.Args,
 		killable: evt.Killable,
-		env:      evt.Env,
 	})
 
 	if evt.Autostart {

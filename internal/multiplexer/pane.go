@@ -11,11 +11,10 @@ import (
 type pane struct {
 	key      string
 	title    string
-	icon     string
 	dir      string
 	cmd      *exec.Cmd
 	args     []string
-	env      []string
+	env      map[string]string
 	killable bool
 	vt       *tcellterm.VT
 	dead     bool
@@ -24,7 +23,16 @@ type pane struct {
 // Initializes and starts the terminal process for this pane
 func (p *pane) start() error {
 	p.cmd = process.Command(p.args[0], p.args[1:]...)
-	p.cmd.Env = p.env
+
+	// Convert environment map to slice format required by exec.Cmd
+	if p.env != nil {
+		env := make([]string, 0, len(p.env))
+		for key, value := range p.env {
+			env = append(env, key+"="+value)
+		}
+		p.cmd.Env = env
+	}
+
 	if p.dir != "" {
 		p.cmd.Dir = p.dir
 	}

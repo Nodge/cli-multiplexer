@@ -1,0 +1,14 @@
+{
+  "commands": [
+    {
+      "name": "backend",
+      "title": "🚀 API Server",
+      "command": ["echo", "backend running"]
+    },
+    {
+      "name": "frontend",
+      "title": "⚡ Web UI",
+      "command": ["echo", "Frontend running"]
+    }
+  ]
+}
